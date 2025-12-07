@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<title>Otto Web BLE Controller</title>
+<style>
+body { font-family: Arial, sans-serif; text-align:center; background:#f9f9f9; }
+button{
+    width:140px; height:60px; margin:10px; font-size:16px;
+    border:none; border-radius:10px; background:#4CAF50; color:white;
+}
+button.red{ background:#d9534f; }
+button.blue{ background:#0275d8;}
+.container{ margin-top:30px; }
+</style>
+</head>
+<body>
+
+<h2>OTTO BLE 遙控器</h2>
+<button id="connectBle">連線 / Connect</button>
+<button id="disconnectBle" disabled>中斷連線 / Disconnect</button>
+<p id="status">尚未連線</p>
+
+<hr>
+<p>＊請確保 HTTPS 或 Localhost，Android/Windows Chrome 才能使用 Web Bluetooth。</p>
+<hr>
+
+<div class="container">
+    <button onclick="sendMove('forward')">⬆ 前進</button><br>
+    <button onclick="sendMove('left')">⬅ 左轉</button>
+    <button onclick="sendMove('stop')" class="red">⏹ 停止</button>
+    <button onclick="sendMove('right')">➡ 右轉</button><br>
+    <button onclick="sendMove('backward')">⬇ 後退</button>
+</div>
+
+<h3>表情與動作 / Emotions</h3>
+<button onclick="sendGesture('happy')">開心</button>
+<button onclick="sendGesture('superhappy')">超開心</button>
+<button onclick="sendGesture('sad')">難過</button>
+<button onclick="sendGesture('sleeping')">睡覺</button><br>
+<button onclick="sendGesture('confused')">困惑</button>
+<button onclick="sendGesture('fretful')">煩躁</button>
+<button onclick="sendGesture('love')">愛心</button>
+<button onclick="sendGesture('angry')">生氣</button><br>
+<button onclick="sendGesture('magic')">魔法</button>
+<button onclick="sendGesture('wave')">揮手</button>
+<button onclick="sendGesture('victory')">勝利</button>
+<button onclick="sendGesture('fail')">失敗</button><br>
+<button onclick="sendGesture('fart')">放屁</button>
+
+<script>
+let device, server, uartService, tx;
+
+// BLE UUID (OTTO uses BLE UART like HM-10 / JY-MCU)
+const UART_SERVICE = "0000ffe0-0000-1000-8000-00805f9b34fb";
+const UART_TX      = "0000ffe1-0000-1000-8000-00805f9b34fb";
+
+// default speed index
+let speedIndex = 2;
+
+const connectBtn    = document.getElementById("connectBle");
+const disconnectBtn = document.getElementById("disconnectBle");
+const statusEl      = document.getElementById("status");
+
+connectBtn.onclick = async () => {
+    try{
+        // ★★★★★ 改成 acceptAllDevices + optionalServices
+        device = await navigator.bluetooth.requestDevice({
+            acceptAllDevices: true,
+            optionalServices: [UART_SERVICE]
+        });
+
+        device.addEventListener("gattserverdisconnected", onDisconnected);
+
+        server = await device.gatt.connect();
+        uartService = await server.getPrimaryService(UART_SERVICE);
+        tx = await uartService.getCharacteristic(UART_TX);
+
+        statusEl.innerHTML = "已連線: " + device.name;
+        connectBtn.disabled = true;
+        disconnectBtn.disabled = false;
+
+    }catch(e){
+        alert("連線失敗: " + e);
+    }
+};
+
+disconnectBtn.onclick = () => disconnect();
+
+function disconnect(){
+    if (device && device.gatt && device.gatt.connected){
+        device.gatt.disconnect();
+    } else {
+        onDisconnected();
+    }
+}
+
+function onDisconnected(){
+    tx = null;
+    uartService = null;
+    server = null;
+    statusEl.innerHTML = "尚未連線";
+    connectBtn.disabled = false;
+    disconnectBtn.disabled = true;
+    console.log("BLE disconnected");
+}
+
+function sendRaw(str){
+    if(!tx){
+        alert("請先連線 BLE");
+        return;
+    }
+    const data = new TextEncoder().encode(str);
+    tx.writeValue(data);
+    console.log(">>> Sent:", JSON.stringify(str));
+}
+
+function sendMove(cmd){
+    const line = cmd + String(speedIndex) + "\n";
+    sendRaw(line);
+}
+
+function sendGesture(cmd){
+    const line = cmd + "0\n";
+    sendRaw(line);
+}
+</script>
+
+</body>
+</html>
+
